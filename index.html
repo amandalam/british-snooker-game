@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>British Snooker Web</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js CDN r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+    
+    :root {
+      --baize-green: #1a4d2e;
+      --gold-accent: #d4af37;
+      --wood-mahogany: #2b110b;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      overflow: hidden;
+      background-color: #0b110e;
+    }
+
+    .font-serif-title {
+      font-family: 'Cinzel', serif;
+    }
+
+    /* Custom range styling for power meter */
+    input[type=range].power-slider {
+      -webkit-appearance: none;
+      background: linear-gradient(to right, #22c55e 0%, #eab308 50%, #ef4444 100%);
+      border-radius: 9999px;
+      height: 10px;
+    }
+    input[type=range].power-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #f8fafc;
+      border: 3px solid #d4af37;
+      box-shadow: 0 0 10px rgba(0,0,0,0.6);
+      cursor: pointer;
+    }
+    input[type=range].power-slider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #f8fafc;
+      border: 3px solid #d4af37;
+      box-shadow: 0 0 10px rgba(0,0,0,0.6);
+      cursor: pointer;
+    }
+
+    /* Message Toast Animation */
+    .toast-anim {
+      animation: fadeInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translate(-50%, -15px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+  </style>
+</head>
+<body class="w-screen h-screen relative text-slate-100">
+
+  <!-- 3D WebGL Canvas Layer -->
+  <div id="canvas-container" class="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+  <!-- Top Status & Scoreboard Bar -->
+  <header class="absolute top-0 inset-x-0 p-2 sm:p-4 pointer-events-none flex flex-col items-center z-10">
+    <div class="pointer-events-auto w-full max-w-4xl bg-stone-900/90 backdrop-blur-md border border-amber-600/40 rounded-2xl shadow-2xl p-2.5 sm:p-3 flex items-center justify-between gap-2">
+      <!-- Game Branding & Frame Status -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-amber-700 to-yellow-400 p-[2px] shadow flex items-center justify-center">
+          <div class="w-full h-full bg-stone-950 rounded-full flex items-center justify-center text-amber-300 font-bold text-xs sm:text-sm">
+            147
+          </div>
+        </div>
+        <div>
+          <h1 class="font-serif-title text-xs sm:text-base tracking-wider text-amber-200 uppercase font-bold leading-tight">
+            British Snooker
+          </h1>
+          <p id="target-indicator" class="text-[11px] sm:text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-600 shadow-sm animate-pulse"></span>
+            Target: <span id="target-label" class="text-white uppercase font-bold">Any Red</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Live Score & Current Break -->
+      <div class="flex items-center gap-2 sm:gap-4">
+        <div class="bg-black/60 px-3 py-1 rounded-xl border border-stone-800 text-center min-w-[70px]">
+          <span class="text-[10px] tracking-wider uppercase text-stone-400 block font-semibold">Break</span>
+          <span id="score-break" class="text-base sm:text-xl font-bold text-amber-400">0</span>
+        </div>
+        <div class="bg-black/60 px-3 py-1 rounded-xl border border-stone-800 text-center min-w-[85px]">
+          <span class="text-[10px] tracking-wider uppercase text-stone-400 block font-semibold">Total</span>
+          <span id="score-total" class="text-base sm:text-xl font-bold text-emerald-400">0</span>
+        </div>
+        <div class="bg-black/60 px-2.5 py-1 rounded-xl border border-stone-800 text-center hidden sm:block">
+          <span class="text-[10px] tracking-wider uppercase text-stone-400 block font-semibold">Reds Left</span>
+          <span id="reds-count" class="text-sm sm:text-lg font-bold text-red-500">15</span>
+        </div>
+      </div>
+
+      <!-- Action & View Controls -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button id="btn-camera-toggle" class="bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/50 text-amber-200 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 flex items-center gap-1.5" title="Switch Eye-level / Overhead View">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+          </svg>
+          <span id="camera-view-label" class="hidden sm:inline">Top View</span>
+        </button>
+
+        <button id="btn-reset-table" class="bg-stone-800/80 hover:bg-stone-700 border border-stone-600 text-stone-300 p-1.5 sm:px-2.5 rounded-xl text-xs transition active:scale-95" title="Reset Table / New Frame">
+          <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Announcement Toast / Foul Message Banner -->
+  <div id="toast-banner" class="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none hidden max-w-sm sm:max-w-md w-11/12">
+    <div id="toast-inner" class="bg-red-950/95 border-2 border-red-500 text-red-100 rounded-xl px-4 py-2.5 shadow-2xl text-center text-xs sm:text-sm font-semibold toast-anim backdrop-blur-md">
+      Foul: In-Off (White ball pocketed) (-4 pts)
+    </div>
+  </div>
+
+  <!-- Bottom Interactive Cue & Strike HUD -->
+  <footer class="absolute bottom-3 inset-x-0 p-2 sm:p-4 pointer-events-none flex justify-center z-10">
+    <div class="pointer-events-auto w-full max-w-xl bg-stone-900/90 backdrop-blur-lg border border-amber-600/40 rounded-2xl shadow-2xl p-3 sm:p-4 flex flex-col gap-3">
+      
+      <!-- Top Row: Fine Aim Tuning & Cue Angle Controls -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] text-stone-400 font-semibold uppercase tracking-wider">Fine Aim:</span>
+          <button id="btn-nudge-left" class="bg-stone-800 hover:bg-stone-700 active:bg-amber-600 text-amber-200 border border-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1">
+            ◀ 0.5°
+          </button>
+          <button id="btn-nudge-right" class="bg-stone-800 hover:bg-stone-700 active:bg-amber-600 text-amber-200 border border-stone-700 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1">
+            0.5° ▶
+          </button>
+        </div>
+        <div class="text-[11px] text-stone-400 text-right">
+          <span class="hidden sm:inline">Drag canvas to aim</span>
+        </div>
+      </div>
+
+      <!-- Bottom Row: Power Slider and Strike Button -->
+      <div class="flex items-center gap-3 sm:gap-4">
+        <!-- Power Bar Control -->
+        <div class="flex-1 flex flex-col gap-1">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span class="text-amber-300 uppercase tracking-wider flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 text-amber-400 inline" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+              </svg>
+              Strike Power
+            </span>
+            <span id="power-display" class="text-amber-400 text-sm font-mono">60%</span>
+          </div>
+          <input id="power-slider" type="range" min="5" max="100" value="60" class="power-slider w-full cursor-pointer">
+          <div class="flex justify-between text-[10px] text-stone-500 font-medium px-0.5">
+            <span>Touch</span>
+            <span>Medium</span>
+            <span>Break (100%)</span>
+          </div>
+        </div>
+
+        <!-- Big Strike Cue Action Button -->
+        <button id="btn-strike" class="bg-gradient-to-r from-emerald-600 to-green-500 hover:from-emerald-500 hover:to-green-400 active:scale-95 text-white font-serif-title font-bold px-6 sm:px-8 py-3 rounded-xl shadow-lg shadow-emerald-900/50 border border-emerald-300/40 text-sm sm:text-base tracking-widest uppercase transition-all flex items-center gap-2">
+          <span>STRIKE</span>
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"/>
+          </svg>
+        </button>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- Application Logic & Physics Engine -->
+  <script>
+    /* ==========================================================================
+       SYNTHESIZED SOUND EFFECTS ENGINE (Web Audio API)
+       ========================================================================== */
+    class SnookerSoundFX {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      // Crisp click when two resin snooker balls collide
+      playBallHit(velocity = 1.0) {
+        if (!this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          const intensity = Math.min(Math.max(velocity * 4.5, 0.15), 2.5);
+          const baseFreq = 780 + Math.min(intensity * 260, 600) + Math.random() * 30;
+          osc.frequency.setValueAtTime(baseFreq, now);
+          osc.frequency.exponentialRampToValueAtTime(130, now + 0.035);
+
+          const volume = Math.min(Math.max(intensity * 0.28, 0.04), 0.75);
+          gain.gain.setValueAtTime(volume, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        } catch (e) { console.warn(e); }
+      }
+      // Muffled deep thud for cushion rebound
+      playCushionBounce(vel = 1.0) {
+        if (!this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(42, now + 0.065);
+
+          const volume = Math.min(Math.max(vel * 1.5, 0.04), 0.6);
+          gain.gain.setValueAtTime(volume, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } catch (e) { console.warn(e); }
+      }
+      // Ball falling into pocket leather net
+      playPocket() {
+        if (!this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(210, now);
+          osc.frequency.exponentialRampToValueAtTime(65, now + 0.22);
+
+          gain.gain.setValueAtTime(0.7, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.28);
+        } catch (e) { console.warn(e); }
+      }
+      // Wood-on-resin cue tip strike
+      playCueStrike(speed = 1.0) {
+        if (!this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const bufferSize = this.ctx.sampleRate * 0.035;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.22));
+          }
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.value = 1700;
+
+          const gain = this.ctx.createGain();
+          const vol = Math.min(Math.max(speed * 1.2, 0.08), 0.85);
+          gain.gain.setValueAtTime(vol, now);
+
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.ctx.destination);
+          noise.start(now);
+        } catch (e) { console.warn(e); }
+      }
+      // Foul horn/buzzer tone
+      playFoul() {
+        if (!this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(120, now);
+          osc.frequency.setValueAtTime(90, now + 0.14);
+
+          gain.gain.setValueAtTime(0.45, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.42);
+        } catch (e) { console.warn(e); }
+      }
+    }
+
+    const sound = new SnookerSoundFX();
+
+    /* ==========================================================================
+       TABLE DIMENSIONS & CONSTANTS (12ft Full Size Proportions)
+       ========================================================================== */
+    const TABLE_L = 36.0;         // Table length (along X)
+    const TABLE_W = 18.0;         // Table width (along Z)
+    const HALF_L = TABLE_L / 2;
+    const HALF_W = TABLE_W / 2;
+    const BALL_RADIUS = 0.40;     // Visual & collision scale
+    const POCKET_RADIUS = 0.95;   // Generous realistic pocket jaw drop
+
+    // Calibrated Snooker Physics Constants
+    const CUSHION_RESTITUTION = 0.75; // Realistic deadened cloth cushion rebound
+    const BALL_RESTITUTION = 0.92;    // Natural resin billiard ball elasticity
+    const BAIZE_DAMPING = 0.986;      // Proportional cloth drag per physics sub-step
+    const LINEAR_ROLLING_DECEL = 0.00018; // Crisp halt, prevents creeping
+    const STOP_VEL = 0.0025;          // Settle velocity threshold
+
+    // Spot Coordinates on Table Cloth
+    const BAULK_X = -HALF_L * 0.58; // 29 inches baulk line
+    const D_RADIUS = 3.4;
+    const SPOTS = {
+      black:  new THREE.Vector2(HALF_L - 3.8, 0),
+      pink:   new THREE.Vector2(HALF_L * 0.5, 0),
+      blue:   new THREE.Vector2(0, 0),
+      brown:  new THREE.Vector2(BAULK_X, 0),
+      green:  new THREE.Vector2(BAULK_X, -D_RADIUS),
+      yellow: new THREE.Vector2(BAULK_X, D_RADIUS),
+      cue:    new THREE.Vector2(BAULK_X, 0.8) // Default inside 'D'
+    };
+
+    // 6 Pocket Positions (4 Corners, 2 Middle)
+    const POCKETS = [
+      new THREE.Vector2(-HALF_L + 0.5, -HALF_W + 0.5), // Top Left
+      new THREE.Vector2(HALF_L - 0.5, -HALF_W + 0.5),  // Top Right
+      new THREE.Vector2(-HALF_L + 0.5, HALF_W - 0.5),  // Bottom Left
+      new THREE.Vector2(HALF_L - 0.5, HALF_W - 0.5),   // Bottom Right
+      new THREE.Vector2(0, -HALF_W + 0.3),             // Center Top
+      new THREE.Vector2(0, HALF_W - 0.3)               // Center Bottom
+    ];
+
+    /* ==========================================================================
+       GAME STATE & RULES REPOSITORY
+       ========================================================================== */
+    const COLOR_INFO = {
+      red:    { name: 'Red',    points: 1, hex: 0xd91424 },
+      yellow: { name: 'Yellow', points: 2, hex: 0xfacc15 },
+      green:  { name: 'Green',  points: 3, hex: 0x16a34a },
+      brown:  { name: 'Brown',  points: 4, hex: 0x854d0e },
+      blue:   { name: 'Blue',   points: 5, hex: 0x2563eb },
+      pink:   { name: 'Pink',   points: 6, hex: 0xf472b6 },
+      black:  { name: 'Black',  points: 7, hex: 0x18181b }
+    };
+
+    const CLEARANCE_ORDER = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
+
+    let gameState = {
+      score: 0,
+      currentBreak: 0,
+      targetType: 'red', // 'red', 'colour', or specific color string ('yellow', etc.)
+      isShotActive: false,
+      isStrikingAnimation: false,
+      cueAnimOffset: 0,
+      firstBallHit: null,
+      pottedThisShot: [],
+      whitePotted: false,
+      aimAngle: 0,       // Radians
+      power: 60,         // 5 to 100
+      cameraView: 'cue'  // 'cue' or 'top'
+    };
+
+    /* ==========================================================================
+       THREE.JS SCENE SETUP
+       ========================================================================== */
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a100d);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 150);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Warm Gentlemen's Club Lighting
+    const ambientLight = new THREE.AmbientLight(0xfffaed, 0.65);
+    scene.add(ambientLight);
+
+    // Overhead 3-lamp canopy spotlights over table
+    const lampPositions = [-TABLE_L * 0.3, 0, TABLE_L * 0.3];
+    lampPositions.forEach((lx) => {
+      const spot = new THREE.SpotLight(0xfff3d6, 1.3);
+      spot.position.set(lx, 15, 0);
+      spot.angle = 0.95;
+      spot.penumbra = 0.6;
+      spot.castShadow = true;
+      spot.shadow.mapSize.width = 1024;
+      spot.shadow.mapSize.height = 1024;
+      spot.shadow.camera.near = 5;
+      spot.shadow.camera.far = 25;
+      scene.add(spot);
+    });
+
+    /* ==========================================================================
+       TABLE 3D MODEL GEOMETRY & DETAILS
+       ========================================================================== */
+    const tableGroup = new THREE.Group();
+    scene.add(tableGroup);
+
+    // 1. Baize Slate Bed
+    const bedGeo = new THREE.BoxGeometry(TABLE_L, 0.5, TABLE_W);
+    const baizeMat = new THREE.MeshStandardMaterial({
+      color: 0x14532d,
+      roughness: 0.85,
+      metalness: 0.05
+    });
+    const tableBed = new THREE.Mesh(bedGeo, baizeMat);
+    tableBed.position.y = -0.25;
+    tableBed.receiveShadow = true;
+    tableGroup.add(tableBed);
+
+    // 2. Table Markings: Baulk line and 'D' semicircle
+    const baulkLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(BAULK_X, 0.01, -HALF_W + 1.2),
+      new THREE.Vector3(BAULK_X, 0.01, HALF_W - 1.2)
+    ]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xdcfce7, opacity: 0.55, transparent: true, linewidth: 2 });
+    const baulkLine = new THREE.Line(baulkLineGeo, lineMat);
+    tableGroup.add(baulkLine);
+
+    // Semicircle 'D'
+    const dCurvePoints = [];
+    for (let i = 0; i <= 36; i++) {
+      const theta = -Math.PI / 2 + (Math.PI * i) / 36;
+      dCurvePoints.push(new THREE.Vector3(
+        BAULK_X - Math.cos(theta) * D_RADIUS,
+        0.01,
+        Math.sin(theta) * D_RADIUS
+      ));
+    }
+    const dGeo = new THREE.BufferGeometry().setFromPoints(dCurvePoints);
+    const dLine = new THREE.Line(dGeo, lineMat);
+    tableGroup.add(dLine);
+
+    // 3. Mahogany Cushion Rails & Brass Accents
+    const woodMat = new THREE.MeshStandardMaterial({
+      color: 0x2e110b,
+      roughness: 0.35,
+      metalness: 0.15
+    });
+    const brassMat = new THREE.MeshStandardMaterial({
+      color: 0xd4af37,
+      roughness: 0.25,
+      metalness: 0.85
+    });
+
+    const railHeight = 0.85;
+    const railThick = 1.4;
+
+    // Longitudinal Rails (Top/Bottom)
+    const longRailGeo = new THREE.BoxGeometry(TABLE_L + railThick * 2, railHeight, railThick);
+    const topRail = new THREE.Mesh(longRailGeo, woodMat);
+    topRail.position.set(0, railHeight / 2 - 0.25, -HALF_W - railThick / 2);
+    topRail.castShadow = true;
+    topRail.receiveShadow = true;
+    tableGroup.add(topRail);
+
+    const bottomRail = new THREE.Mesh(longRailGeo, woodMat);
+    bottomRail.position.set(0, railHeight / 2 - 0.25, HALF_W + railThick / 2);
+    bottomRail.castShadow = true;
+    bottomRail.receiveShadow = true;
+    tableGroup.add(bottomRail);
+
+    // Lateral Rails (Left/Right)
+    const shortRailGeo = new THREE.BoxGeometry(railThick, railHeight, TABLE_W);
+    const leftRail = new THREE.Mesh(shortRailGeo, woodMat);
+    leftRail.position.set(-HALF_L - railThick / 2, railHeight / 2 - 0.25, 0);
+    leftRail.castShadow = true;
+    leftRail.receiveShadow = true;
+    tableGroup.add(leftRail);
+
+    const rightRail = new THREE.Mesh(shortRailGeo, woodMat);
+    rightRail.position.set(HALF_L + railThick / 2, railHeight / 2 - 0.25, 0);
+    rightRail.castShadow = true;
+    rightRail.receiveShadow = true;
+    tableGroup.add(rightRail);
+
+    // 4. Pocket Cups & Pocket Net visual rings
+    const pocketGeo = new THREE.CylinderGeometry(POCKET_RADIUS, POCKET_RADIUS * 0.9, 0.7, 32);
+    const pocketMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+    const brassRimGeo = new THREE.TorusGeometry(POCKET_RADIUS, 0.08, 12, 32);
+
+    POCKETS.forEach(p => {
+      const pocketMesh = new THREE.Mesh(pocketGeo, pocketMat);
+      pocketMesh.position.set(p.x, -0.2, p.y);
+      tableGroup.add(pocketMesh);
+
+      const rimMesh = new THREE.Mesh(brassRimGeo, brassMat);
+      rimMesh.rotation.x = Math.PI / 2;
+      rimMesh.position.set(p.x, 0.02, p.y);
+      tableGroup.add(rimMesh);
+    });
+
+    /* ==========================================================================
+       BALL ENTITY MANAGEMENT & MESHES
+       ========================================================================== */
+    const ballGeometry = new THREE.SphereGeometry(BALL_RADIUS, 32, 32);
+    let balls = [];
+    let cueBall = null;
+
+    class BallEntity {
+      constructor(type, x, z) {
+        this.type = type; // 'white', 'red', or color name
+        this.pos = new THREE.Vector2(x, z);
+        this.vel = new THREE.Vector2(0, 0);
+        this.isPotted = false;
+        this.radius = BALL_RADIUS;
+
+        let colorHex = 0xffffff;
+        if (type === 'white') colorHex = 0xfcfbf9;
+        else if (COLOR_INFO[type]) colorHex = COLOR_INFO[type].hex;
+
+        this.material = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.18,
+          metalness: 0.12
+        });
+
+        this.mesh = new THREE.Mesh(ballGeometry, this.material);
+        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = true;
+        this.updateMeshPosition();
+        scene.add(this.mesh);
+      }
+
+      updateMeshPosition() {
+        this.mesh.position.set(this.pos.x, BALL_RADIUS, this.pos.y);
+      }
+
+      respot(x, z) {
+        this.pos.set(x, z);
+        this.vel.set(0, 0);
+        this.isPotted = false;
+        this.mesh.visible = true;
+        this.updateMeshPosition();
+      }
+    }
+
+    /* ==========================================================================
+       VIRTUAL CUE STICK & AIMING VISUALS
+       ========================================================================== */
+    const cueStickGroup = new THREE.Group();
+    scene.add(cueStickGroup);
+
+    // Cue shaft geometry with tapered tip
+    const cueShaftGeo = new THREE.CylinderGeometry(0.06, 0.16, 17.5, 24);
+    const cueWoodMat = new THREE.MeshStandardMaterial({ color: 0xdeb887, roughness: 0.4 });
+    const cueShaftMesh = new THREE.Mesh(cueShaftGeo, cueWoodMat);
+    cueShaftMesh.rotation.x = Math.PI / 2;
+    cueShaftMesh.position.z = -9.0;
+    cueShaftMesh.castShadow = true;
+    cueStickGroup.add(cueShaftMesh);
+
+    // Tip brass ferrule & chalked blue tip
+    const ferruleGeo = new THREE.CylinderGeometry(0.062, 0.065, 0.35, 24);
+    const ferruleMesh = new THREE.Mesh(ferruleGeo, brassMat);
+    ferruleMesh.rotation.x = Math.PI / 2;
+    ferruleMesh.position.z = -0.2;
+    cueStickGroup.add(ferruleMesh);
+
+    const tipGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.1, 24);
+    const tipMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+    const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+    tipMesh.rotation.x = Math.PI / 2;
+    tipMesh.position.z = -0.05;
+    cueStickGroup.add(tipMesh);
+
+    // Trajectory Aiming Laser Line
+    const guideLineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, 1)
+    ]);
+    const guideLineMat = new THREE.LineDashedMaterial({
+      color: 0x60a5fa,
+      dashSize: 0.4,
+      gapSize: 0.25,
+      transparent: true,
+      opacity: 0.85
+    });
+    const guideLine = new THREE.Line(guideLineGeo, guideLineMat);
+    scene.add(guideLine);
+
+    // Ghost Ball Indicator at contact point
+    const ghostBallGeo = new THREE.SphereGeometry(BALL_RADIUS, 18, 18);
+    const ghostBallMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.35
+    });
+    const ghostBallMesh = new THREE.Mesh(ghostBallGeo, ghostBallMat);
+    scene.add(ghostBallMesh);
+
+    /* ==========================================================================
+       SETUP TABLE BALL POSITIONS (Full British Snooker Racking)
+       ========================================================================== */
+    function rackSnookerTable() {
+      // Clean up prior meshes
+      balls.forEach(b => scene.remove(b.mesh));
+      balls = [];
+
+      // 1. Cue Ball in 'D'
+      cueBall = new BallEntity('white', SPOTS.cue.x, SPOTS.cue.y);
+      balls.push(cueBall);
+
+      // 2. Six Colours
+      balls.push(new BallEntity('yellow', SPOTS.yellow.x, SPOTS.yellow.y));
+      balls.push(new BallEntity('green',  SPOTS.green.x,  SPOTS.green.y));
+      balls.push(new BallEntity('brown',  SPOTS.brown.x,  SPOTS.brown.y));
+      balls.push(new BallEntity('blue',   SPOTS.blue.x,   SPOTS.blue.y));
+      balls.push(new BallEntity('pink',   SPOTS.pink.x,   SPOTS.pink.y));
+      balls.push(new BallEntity('black',  SPOTS.black.x,  SPOTS.black.y));
+
+      // 3. 15 Reds Triangle behind Pink
+      const apexX = SPOTS.pink.x + BALL_RADIUS * 2.2;
+      const apexZ = 0;
+      const rowSpacing = BALL_RADIUS * 1.76;
+      const colSpacing = BALL_RADIUS * 2.05;
+
+      for (let row = 0; row < 5; row++) {
+        const count = row + 1;
+        const startZ = -((count - 1) * colSpacing) / 2;
+        for (let col = 0; col < count; col++) {
+          const rx = apexX + row * rowSpacing;
+          const rz = startZ + col * colSpacing;
+          balls.push(new BallEntity('red', rx, rz));
+        }
+      }
+
+      // Reset game state
+      gameState.score = 0;
+      gameState.currentBreak = 0;
+      gameState.targetType = 'red';
+      gameState.isShotActive = false;
+      gameState.isStrikingAnimation = false;
+      gameState.aimAngle = 0;
+      updateUI();
+      aimCue();
+    }
+
+    /* ==========================================================================
+       AIMING & TRAJECTORY RAYCASTING
+       ========================================================================== */
+    function aimCue() {
+      if (!cueBall || cueBall.isPotted) return;
+
+      const forwardX = Math.cos(gameState.aimAngle);
+      const forwardZ = Math.sin(gameState.aimAngle);
+
+      // Smooth realistic pullback visual matching calibrated power (5% - 100%)
+      const normPower = Math.min(Math.max(parseFloat(gameState.power) || 60, 5), 100) / 100.0;
+      const powerPullback = 0.35 + normPower * 1.9;
+      const effectiveOffset = gameState.isStrikingAnimation ? gameState.cueAnimOffset : powerPullback;
+
+      // Position cue behind cue ball
+      cueStickGroup.position.set(
+        cueBall.pos.x - forwardX * effectiveOffset,
+        BALL_RADIUS,
+        cueBall.pos.y - forwardZ * effectiveOffset
+      );
+      cueStickGroup.rotation.y = -gameState.aimAngle + Math.PI / 2;
+      cueStickGroup.rotation.x = 0.08; // Gentle professional elevation
+
+      // Trajectory Raycast for Ghost Contact Point
+      let minDistance = 45.0;
+      let contactPos = null;
+
+      balls.forEach(target => {
+        if (target === cueBall || target.isPotted) return;
+        const dX = target.pos.x - cueBall.pos.x;
+        const dZ = target.pos.y - cueBall.pos.y;
+        const dot = dX * forwardX + dZ * forwardZ;
+
+        if (dot > 0) {
+          const perpDistSq = (dX * dX + dZ * dZ) - (dot * dot);
+          const collisionDist = BALL_RADIUS * 2;
+          if (perpDistSq < collisionDist * collisionDist) {
+            const hitDistance = dot - Math.sqrt(collisionDist * collisionDist - perpDistSq);
+            if (hitDistance > 0 && hitDistance < minDistance) {
+              minDistance = hitDistance;
+              contactPos = new THREE.Vector2(
+                cueBall.pos.x + forwardX * hitDistance,
+                cueBall.pos.y + forwardZ * hitDistance
+              );
+            }
+          }
+        }
+      });
+
+      // Update Laser Guide line
+      const lineEnd = contactPos || new THREE.Vector2(
+        cueBall.pos.x + forwardX * 18.0,
+        cueBall.pos.y + forwardZ * 18.0
+      );
+
+      const positions = new Float32Array([
+        cueBall.pos.x, BALL_RADIUS, cueBall.pos.y,
+        lineEnd.x, BALL_RADIUS, lineEnd.y
+      ]);
+      guideLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      guideLine.geometry.computeBoundingSphere();
+      guideLine.computeLineDistances();
+      guideLine.visible = !gameState.isShotActive;
+
+      // Ghost ball mesh at contact
+      if (contactPos && !gameState.isShotActive) {
+        ghostBallMesh.position.set(contactPos.x, BALL_RADIUS, contactPos.y);
+        ghostBallMesh.visible = true;
+      } else {
+        ghostBallMesh.visible = false;
+      }
+
+      cueStickGroup.visible = !gameState.isShotActive;
+    }
+
+    /* ==========================================================================
+       PHYSICS ENGINE: BALL COLLISIONS, CUSHIONS, POCKET DETECTION
+       ========================================================================== */
+    function physicsStep(dt) {
+      // 1. Position integration, Baize drag & linear decelerator
+      balls.forEach(b => {
+        if (b.isPotted) return;
+
+        b.pos.x += b.vel.x;
+        b.pos.y += b.vel.y;
+
+        const currentSpeed = b.vel.length();
+
+        if (currentSpeed > 0) {
+          // Combined geometric cloth friction + linear resistance
+          const newSpeed = Math.max(0, currentSpeed * BAIZE_DAMPING - LINEAR_ROLLING_DECEL);
+          if (newSpeed < STOP_VEL) {
+            b.vel.set(0, 0);
+          } else {
+            b.vel.multiplyScalar(newSpeed / currentSpeed);
+          }
+        }
+
+        b.updateMeshPosition();
+
+        // Check Pockets
+        POCKETS.forEach(p => {
+          if (!b.isPotted && b.pos.distanceTo(p) < POCKET_RADIUS) {
+            b.isPotted = true;
+            b.mesh.visible = false;
+            b.vel.set(0, 0);
+            sound.playPocket();
+
+            if (b === cueBall) {
+              gameState.whitePotted = true;
+            } else {
+              gameState.pottedThisShot.push(b);
+            }
+          }
+        });
+
+        // Cushion Boundaries (Accounting for ball radius and rail geometry)
+        const maxX = HALF_L - 0.7 - BALL_RADIUS;
+        const minX = -HALF_L + 0.7 + BALL_RADIUS;
+        const maxZ = HALF_W - 0.7 - BALL_RADIUS;
+        const minZ = -HALF_W + 0.7 + BALL_RADIUS;
+
+        if (b.pos.x > maxX) {
+          b.pos.x = maxX;
+          b.vel.x = -b.vel.x * CUSHION_RESTITUTION;
+          if (Math.abs(b.vel.x) > 0.02) sound.playCushionBounce(Math.abs(b.vel.x));
+        } else if (b.pos.x < minX) {
+          b.pos.x = minX;
+          b.vel.x = -b.vel.x * CUSHION_RESTITUTION;
+          if (Math.abs(b.vel.x) > 0.02) sound.playCushionBounce(Math.abs(b.vel.x));
+        }
+
+        if (b.pos.y > maxZ) {
+          b.pos.y = maxZ;
+          b.vel.y = -b.vel.y * CUSHION_RESTITUTION;
+          if (Math.abs(b.vel.y) > 0.02) sound.playCushionBounce(Math.abs(b.vel.y));
+        } else if (b.pos.y < minZ) {
+          b.pos.y = minZ;
+          b.vel.y = -b.vel.y * CUSHION_RESTITUTION;
+          if (Math.abs(b.vel.y) > 0.02) sound.playCushionBounce(Math.abs(b.vel.y));
+        }
+      });
+
+      // 2. Ball-to-Ball Elastic Collisions
+      for (let i = 0; i < balls.length; i++) {
+        for (let j = i + 1; j < balls.length; j++) {
+          const b1 = balls[i];
+          const b2 = balls[j];
+          if (b1.isPotted || b2.isPotted) continue;
+
+          const delta = new THREE.Vector2().subVectors(b2.pos, b1.pos);
+          const dist = delta.length();
+          const minDist = b1.radius + b2.radius;
+
+          if (dist < minDist && dist > 0) {
+            // Register first legal/illegal ball struck by cue ball
+            if ((b1 === cueBall || b2 === cueBall) && !gameState.firstBallHit) {
+              gameState.firstBallHit = (b1 === cueBall) ? b2 : b1;
+            }
+
+            // Normal and Tangent resolution
+            const normal = delta.clone().normalize();
+            const overlap = minDist - dist;
+            b1.pos.addScaledVector(normal, -overlap * 0.5);
+            b2.pos.addScaledVector(normal, overlap * 0.5);
+
+            const v1n = b1.vel.dot(normal);
+            const v2n = b2.vel.dot(normal);
+
+            if (v1n - v2n > 0) {
+              const impulse = (v1n - v2n) * BALL_RESTITUTION;
+              b1.vel.addScaledVector(normal, -impulse);
+              b2.vel.addScaledVector(normal, impulse);
+              sound.playBallHit(Math.abs(impulse));
+            }
+          }
+        }
+      }
+    }
+
+    function areBallsStationary() {
+      return balls.every(b => b.isPotted || b.vel.length() === 0);
+    }
+
+    /* ==========================================================================
+       RESPOTTING LOGIC FOR SNOOKER COLOURS
+       ========================================================================== */
+    function respotColour(ball) {
+      if (ball.type === 'red' || ball.type === 'white') return;
+
+      const originalSpot = SPOTS[ball.type];
+      let chosenSpot = originalSpot;
+
+      // Check if spot is occupied
+      const isOccupied = (pt) => balls.some(b => !b.isPotted && b !== ball && b.pos.distanceTo(pt) < BALL_RADIUS * 2.2);
+
+      if (isOccupied(chosenSpot)) {
+        // Try highest value available spot hierarchy: Black -> Pink -> Blue -> Brown -> Green -> Yellow
+        const priority = ['black', 'pink', 'blue', 'brown', 'green', 'yellow'];
+        for (let name of priority) {
+          if (!isOccupied(SPOTS[name])) {
+            chosenSpot = SPOTS[name];
+            break;
+          }
+        }
+      }
+
+      ball.respot(chosenSpot.x, chosenSpot.y);
+    }
+
+    /* ==========================================================================
+       OFFICIAL BRITISH SNOOKER RULES & FOUL ARBITRATION
+       ========================================================================== */
+    function showToast(message, isFoul = false) {
+      const banner = document.getElementById('toast-banner');
+      const inner = document.getElementById('toast-inner');
+      inner.textContent = message;
+      if (isFoul) {
+        inner.className = 'bg-red-950/95 border-2 border-red-500 text-red-100 rounded-xl px-4 py-2.5 shadow-2xl text-center text-xs sm:text-sm font-semibold toast-anim backdrop-blur-md';
+        sound.playFoul();
+      } else {
+        inner.className = 'bg-emerald-950/95 border-2 border-emerald-500 text-emerald-100 rounded-xl px-4 py-2.5 shadow-2xl text-center text-xs sm:text-sm font-semibold toast-anim backdrop-blur-md';
+      }
+      banner.classList.remove('hidden');
+      setTimeout(() => banner.classList.add('hidden'), 3500);
+    }
+
+    function processShotOutcome() {
+      gameState.isShotActive = false;
+      const redsRemaining = balls.filter(b => b.type === 'red' && !b.isPotted).length;
+
+      let foulCommitted = false;
+      let foulPoints = 4; // Snooker minimum foul penalty
+      let foulReason = '';
+
+      // 1. Foul: White ball potted (In-Off)
+      if (gameState.whitePotted) {
+        foulCommitted = true;
+        foulReason = 'Foul: In-Off (Cue Ball Potted)';
+      }
+
+      // 2. Foul: No ball contacted at all
+      if (!foulCommitted && !gameState.firstBallHit) {
+        foulCommitted = true;
+        foulReason = 'Foul: Miss (No object ball contacted)';
+      }
+
+      // 3. Foul: Wrong ball struck first
+      if (!foulCommitted && gameState.firstBallHit) {
+        const hitType = gameState.firstBallHit.type;
+        if (gameState.targetType === 'red') {
+          if (hitType !== 'red') {
+            foulCommitted = true;
+            const penalty = Math.max(4, COLOR_INFO[hitType] ? COLOR_INFO[hitType].points : 4);
+            foulPoints = penalty;
+            foulReason = `Foul: Struck ${COLOR_INFO[hitType].name} first (Red required)`;
+          }
+        } else if (gameState.targetType === 'colour') {
+          if (hitType === 'red') {
+            foulCommitted = true;
+            foulReason = 'Foul: Struck Red first (Any Colour required)';
+          }
+        } else {
+          // Sequential clearance target (yellow, green, etc.)
+          if (hitType !== gameState.targetType) {
+            foulCommitted = true;
+            const targetVal = COLOR_INFO[gameState.targetType].points;
+            const hitVal = COLOR_INFO[hitType] ? COLOR_INFO[hitType].points : 4;
+            foulPoints = Math.max(4, targetVal, hitVal);
+            foulReason = `Foul: Struck ${hitType} instead of ${COLOR_INFO[gameState.targetType].name}`;
+          }
+        }
+      }
+
+      // 4. Evaluate Potted Balls
+      const pottedReds = gameState.pottedThisShot.filter(b => b.type === 'red');
+      const pottedColours = gameState.pottedThisShot.filter(b => b.type !== 'red');
+
+      if (!foulCommitted) {
+        if (gameState.targetType === 'red') {
+          if (pottedColours.length > 0) {
+            foulCommitted = true;
+            foulPoints = Math.max(4, ...pottedColours.map(c => COLOR_INFO[c.type].points));
+            foulReason = 'Foul: Potted Colour when Red was on';
+          } else if (pottedReds.length > 0) {
+            // Legal Red potted!
+            const pts = pottedReds.length * 1;
+            gameState.score += pts;
+            gameState.currentBreak += pts;
+            gameState.targetType = 'colour'; // Must now nominate/shoot any colour
+            showToast(`Potted Red (+${pts})! Now choose any Colour.`);
+          } else {
+            // Empty shot (no balls potted, break ends)
+            gameState.currentBreak = 0;
+            gameState.targetType = 'red';
+          }
+        } else if (gameState.targetType === 'colour') {
+          if (pottedReds.length > 0) {
+            foulCommitted = true;
+            foulReason = 'Foul: Potted Red when Colour was nominated';
+          } else if (pottedColours.length === 1) {
+            // Legal Colour potted
+            const colorBall = pottedColours[0];
+            const pts = COLOR_INFO[colorBall.type].points;
+            gameState.score += pts;
+            gameState.currentBreak += pts;
+            showToast(`Potted ${COLOR_INFO[colorBall.type].name} (+${pts})!`);
+
+            if (redsRemaining > 0) {
+              // Respot colour and switch back to reds
+              respotColour(colorBall);
+              gameState.targetType = 'red';
+            } else {
+              // All reds cleared! Enter sequential clearance beginning with yellow
+              respotColour(colorBall);
+              gameState.targetType = 'yellow';
+            }
+          } else if (pottedColours.length > 1) {
+            foulCommitted = true;
+            foulPoints = Math.max(4, ...pottedColours.map(c => COLOR_INFO[c.type].points));
+            foulReason = 'Foul: More than one Colour potted';
+          } else {
+            // Colour missed
+            gameState.currentBreak = 0;
+            gameState.targetType = redsRemaining > 0 ? 'red' : 'yellow';
+          }
+        } else {
+          // Sequential clearance phase (Yellow -> Green -> ... -> Black)
+          const expected = gameState.targetType;
+          const matchingPotted = pottedColours.find(b => b.type === expected);
+
+          if (matchingPotted && pottedColours.length === 1 && pottedReds.length === 0) {
+            const pts = COLOR_INFO[expected].points;
+            gameState.score += pts;
+            gameState.currentBreak += pts;
+            showToast(`Cleared ${COLOR_INFO[expected].name} (+${pts})!`);
+            // Ball stays off table in clearance phase!
+
+            const nextIndex = CLEARANCE_ORDER.indexOf(expected) + 1;
+            if (nextIndex < CLEARANCE_ORDER.length) {
+              gameState.targetType = CLEARANCE_ORDER[nextIndex];
+            } else {
+              showToast(`FRAME CLEARED! Final Score: ${gameState.score}`);
+            }
+          } else if (pottedColours.length > 0 || pottedReds.length > 0) {
+            foulCommitted = true;
+            foulPoints = Math.max(4, COLOR_INFO[expected].points);
+            foulReason = `Foul: Wrong ball potted during clearance`;
+          } else {
+            // Missed current target
+            gameState.currentBreak = 0;
+          }
+        }
+      }
+
+      // 5. Handle Foul Penalties and Respotting
+      if (foulCommitted) {
+        gameState.score = Math.max(0, gameState.score - foulPoints);
+        gameState.currentBreak = 0;
+        showToast(`${foulReason} (-${foulPoints} pts)`, true);
+
+        // Any illegally potted colours are respotted
+        pottedColours.forEach(c => respotColour(c));
+
+        // In standard rules, target resets to Red (or Yellow if all reds gone)
+        gameState.targetType = (redsRemaining > 0) ? 'red' : (gameState.targetType === 'colour' ? 'yellow' : gameState.targetType);
+      }
+
+      // 6. Respot Cue Ball if pocketed (in 'D')
+      if (gameState.whitePotted) {
+        cueBall.respot(SPOTS.cue.x, SPOTS.cue.y);
+      }
+
+      updateUI();
+      aimCue();
+    }
+
+    /* ==========================================================================
+       USER INTERFACE UPDATES
+       ========================================================================== */
+    function updateUI() {
+      document.getElementById('score-total').textContent = gameState.score;
+      document.getElementById('score-break').textContent = gameState.currentBreak;
+
+      const remainingReds = balls.filter(b => b.type === 'red' && !b.isPotted).length;
+      document.getElementById('reds-count').textContent = remainingReds;
+
+      const targetLabel = document.getElementById('target-label');
+      const targetDot = document.querySelector('#target-indicator span');
+
+      if (gameState.targetType === 'red') {
+        targetLabel.textContent = 'Any Red';
+        targetLabel.className = 'text-red-400 font-bold uppercase';
+        targetDot.style.backgroundColor = '#dc2626';
+      } else if (gameState.targetType === 'colour') {
+        targetLabel.textContent = 'Any Colour';
+        targetLabel.className = 'text-amber-300 font-bold uppercase';
+        targetDot.style.backgroundColor = '#f59e0b';
+      } else {
+        const info = COLOR_INFO[gameState.targetType];
+        targetLabel.textContent = `${info.name} (${info.points})`;
+        targetLabel.className = 'font-bold uppercase';
+        targetDot.style.backgroundColor = `#${info.hex.toString(16).padStart(6, '0')}`;
+      }
+    }
+
+    /* ==========================================================================
+       STRIKE SHOOT ACTION WITH HIGH SPEED & CUE ANIMATION
+       ========================================================================== */
+    function executeStrike() {
+      if (gameState.isShotActive || gameState.isStrikingAnimation || cueBall.isPotted) return;
+      sound.init();
+
+      // Read current power
+      const sliderVal = parseFloat(document.getElementById('power-slider').value);
+      gameState.power = isNaN(sliderVal) ? 60 : Math.min(Math.max(sliderVal, 5), 100);
+
+      gameState.isStrikingAnimation = true;
+      const normPower = gameState.power / 100.0;
+      const pullbackDist = 0.35 + normPower * 1.9;
+      const startTime = performance.now();
+      const strikeDuration = 110; // Realistic forward cue stroke
+
+      function cueStrikeStep(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(1.0, elapsed / strikeDuration);
+
+        // Move cue stick forward toward the cue ball
+        gameState.cueAnimOffset = THREE.MathUtils.lerp(pullbackDist, -0.25, progress);
+        aimCue();
+
+        if (progress < 1.0) {
+          requestAnimationFrame(cueStrikeStep);
+        } else {
+          // Moment of impact with ball!
+          gameState.isStrikingAnimation = false;
+          gameState.isShotActive = true;
+          gameState.firstBallHit = null;
+          gameState.pottedThisShot = [];
+          gameState.whitePotted = false;
+
+          // Hide cue & aiming guides while balls are rolling
+          cueStickGroup.visible = false;
+          guideLine.visible = false;
+          ghostBallMesh.visible = false;
+
+          // Calibrated Snooker Strike Velocity:
+          // 5% power  -> 0.035 units/frame (Gentle tap/feather safety, travels 10-20% of table)
+          // 50% power -> ~0.22 units/frame (Controlled positional shot / potting into corner)
+          // 100% power-> ~0.65 units/frame (Firm break shot opening the red cluster)
+          const strikeSpeed = 0.015 + Math.pow(normPower, 1.42) * 0.635;
+
+          const forwardX = Math.cos(gameState.aimAngle);
+          const forwardZ = Math.sin(gameState.aimAngle);
+
+          cueBall.vel.set(forwardX * strikeSpeed, forwardZ * strikeSpeed);
+          sound.playCueStrike(strikeSpeed);
+        }
+      }
+
+      requestAnimationFrame(cueStrikeStep);
+    }
+
+    /* ==========================================================================
+       INPUT CONTROLS & AIMING INTERACTIONS (TOUCH & MOUSE)
+       ========================================================================== */
+    let isPointerDragging = false;
+    let lastPointerX = 0;
+
+    container.addEventListener('pointerdown', (e) => {
+      if (gameState.isShotActive) return;
+      isPointerDragging = true;
+      lastPointerX = e.clientX;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!isPointerDragging || gameState.isShotActive) return;
+      const deltaX = e.clientX - lastPointerX;
+      lastPointerX = e.clientX;
+
+      // Adjust aim angle smoothly
+      gameState.aimAngle += deltaX * 0.0065;
+      aimCue();
+    });
+
+    window.addEventListener('pointerup', () => {
+      isPointerDragging = false;
+    });
+
+    // Power slider inputs
+    const powerSlider = document.getElementById('power-slider');
+    const powerDisplay = document.getElementById('power-display');
+
+    function updatePowerUI(val) {
+      gameState.power = Math.min(100, Math.max(5, parseFloat(val) || 60));
+      powerDisplay.textContent = `${Math.round(gameState.power)}%`;
+      if (!gameState.isShotActive) aimCue();
+    }
+
+    powerSlider.addEventListener('input', (e) => updatePowerUI(e.target.value));
+    powerSlider.addEventListener('change', (e) => updatePowerUI(e.target.value));
+
+    // Fine aim nudge buttons (0.5 degree steps)
+    const NUDGE_RAD = (0.5 * Math.PI) / 180;
+    document.getElementById('btn-nudge-left').addEventListener('click', () => {
+      if (!gameState.isShotActive) {
+        gameState.aimAngle -= NUDGE_RAD;
+        aimCue();
+      }
+    });
+
+    document.getElementById('btn-nudge-right').addEventListener('click', () => {
+      if (!gameState.isShotActive) {
+        gameState.aimAngle += NUDGE_RAD;
+        aimCue();
+      }
+    });
+
+    // Camera view toggle (First-Person Eye-Level vs Overhead Top-Down)
+    const cameraBtn = document.getElementById('btn-camera-toggle');
+    const cameraLabel = document.getElementById('camera-view-label');
+
+    cameraBtn.addEventListener('click', () => {
+      gameState.cameraView = (gameState.cameraView === 'cue') ? 'top' : 'cue';
+      cameraLabel.textContent = (gameState.cameraView === 'cue') ? 'Top View' : 'Cue View';
+    });
+
+    // Strike button
+    document.getElementById('btn-strike').addEventListener('click', executeStrike);
+
+    // Reset Table button
+    document.getElementById('btn-reset-table').addEventListener('click', () => {
+      rackSnookerTable();
+      showToast('Table reset to opening frame');
+    });
+
+    /* ==========================================================================
+       MAIN ANIMATION LOOP & CAMERA POSITIONING
+       ========================================================================== */
+    let lastTimestamp = performance.now();
+
+    function renderLoop(currentTimestamp) {
+      requestAnimationFrame(renderLoop);
+
+      const dt = Math.min((currentTimestamp - lastTimestamp) / 1000, 0.05);
+      lastTimestamp = currentTimestamp;
+
+      // Physics multi-stepping for crisp collision reliability
+      if (gameState.isShotActive && !gameState.isStrikingAnimation) {
+        const subSteps = 6;
+        for (let step = 0; step < subSteps; step++) {
+          physicsStep(dt / subSteps);
+        }
+
+        if (areBallsStationary()) {
+          processShotOutcome();
+        }
+      }
+
+      // Smooth Camera Positioning
+      if (gameState.cameraView === 'cue' && cueBall) {
+        // Eye-level view along cue stick shaft
+        const forwardX = Math.cos(gameState.aimAngle);
+        const forwardZ = Math.sin(gameState.aimAngle);
+
+        const targetCamX = cueBall.pos.x - forwardX * 7.5;
+        const targetCamY = 3.6;
+        const targetCamZ = cueBall.pos.y - forwardZ * 7.5;
+
+        camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.12);
+        camera.lookAt(cueBall.pos.x + forwardX * 6, BALL_RADIUS + 0.1, cueBall.pos.y + forwardZ * 6);
+      } else {
+        // Overhead Top-Down View
+        camera.position.lerp(new THREE.Vector3(0, 36.0, 0.01), 0.12);
+        camera.lookAt(0, 0, 0);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Responsive Canvas Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Initialize Game on Window Load
+    window.onload = function() {
+      rackSnookerTable();
+      requestAnimationFrame(renderLoop);
+    };
+  </script>
+</body>
+</html>
